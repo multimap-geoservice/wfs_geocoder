@@ -18,9 +18,11 @@ class GeoCoder(WfsFilter):
     Default settings
     ----------------
     wfs_ver - 1.1.0 default!!!
+    wfs_timeout = None/int sec - max timeout to response wfs server 
     out_geom - (Default - None - json)|gml|wkt
     """
     wfs_ver = '1.1.0'
+    wfs_timeout = None
     out_geom = None
     
 
@@ -33,8 +35,15 @@ class GeoCoder(WfsFilter):
             wfs_url = url
         self.debug = debug
         self.map_name_use = map_name
+        
+        wfs_args = {
+            "url": wfs_url,
+            "version": self.wfs_ver,
+        }
+        if isinstance(self.wfs_timeout, int):
+            wfs_args["timeout"] = self.wfs_timeout
         try:
-            self.wfs = WebFeatureService(wfs_url, version=self.wfs_ver)
+            self.wfs = WebFeatureService(**wfs_args)
         except Exception as err:
             raise Exception(
                 u"WFS is not support in '{0}'\n{1}".format(
@@ -233,25 +242,27 @@ class GeoCoder(WfsFilter):
                     for meta in layer.iterfind('{%s}*' % nsmap["ms"]):
                         meta_name = meta.tag.split("{%s}" % nsmap[meta.prefix])[-1]
                         layer_property.append(meta_name)
-            epsg_code = [my.code for my in self.wfs.contents[layer_name].crsOptions]
-            json_out['layers'][layer_name] = {
-                "epsg_code": epsg_code, 
-                "layer_property": layer_property,
-                "max_features": None,
-                "filter": None,
-            }
-            if not all_layer_property:
-                all_layer_property = layer_property
-            else:
-                all_layer_property = list(
-                    set(all_layer_property).intersection(set(layer_property))
-                )
-            if not all_epsg_code:
-                all_epsg_code = epsg_code
-            else:
-                all_epsg_code = list(
-                    set(all_epsg_code).intersection(set(epsg_code))
-                )
+
+            if layer_property:
+                epsg_code = [my.code for my in self.wfs.contents[layer_name].crsOptions]
+                json_out['layers'][layer_name] = {
+                    "epsg_code": epsg_code, 
+                    "layer_property": layer_property,
+                    "max_features": None,
+                    "filter": None,
+                }
+                if not all_layer_property:
+                    all_layer_property = layer_property
+                else:
+                    all_layer_property = list(
+                        set(all_layer_property).intersection(set(layer_property))
+                    )
+                if not all_epsg_code:
+                    all_epsg_code = epsg_code
+                else:
+                    all_epsg_code = list(
+                        set(all_epsg_code).intersection(set(epsg_code))
+                    )
         json_out.update({
             "epsg_code": all_epsg_code,
             "layer_property": all_layer_property,

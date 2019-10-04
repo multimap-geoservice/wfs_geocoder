@@ -252,7 +252,8 @@ class WfsFilter(object):
                 propertyname=self.data2literal(propertyname), 
                 literal=self.data2literal(literal), 
                 wildCard="*", 
-                singleChar=".", 
+                #singleChar=".", 
+                singleChar="?", 
                 escapeChar="!", 
             )
             return etree.tostring(tag.toXML()).decode("utf-8")
