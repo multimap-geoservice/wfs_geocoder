@@ -52,7 +52,10 @@ class GeoCoder(WfsFilter):
                 )
             )
         else:
-            self.capabilities = self.get_capabilities()
+            self.capabilities = None
+            self.get_capabilities()
+            self.info = None
+            self.get_info()
             self._set_def_resp_params()
         
     def _set_def_resp_params(self):
@@ -206,70 +209,78 @@ class GeoCoder(WfsFilter):
         return json_out
     
     def get_info(self):
-        json_out = {}
-        for layer_name in self.wfs.contents:
-            if self.wfs.contents[layer_name].metadataUrls:
-                wfs_opts = self.wfs.contents[layer_name].metadataUrls[0]
-                wfs_opts["gml"] = self.wfs.contents[layer_name].outputFormats[0]
-            else:
-                wfs_opts = None
-            json_out[layer_name] = {
-                "wgs84_bbox": list(self.wfs.contents[layer_name].boundingBoxWGS84),
-                "wfs_opts": wfs_opts, 
-            }
-        if self.debug:
-            self.echo2json(json_out)
-        return json_out
+        if self.info is None:
+            json_out = {}
+            for layer_name in self.wfs.contents:
+                if self.wfs.contents[layer_name].metadataUrls:
+                    wfs_opts = self.wfs.contents[layer_name].metadataUrls[0]
+                    wfs_opts["gml"] = self.wfs.contents[layer_name].outputFormats[0]
+                else:
+                    wfs_opts = None
+                json_out[layer_name] = {
+                    "wgs84_bbox": list(self.wfs.contents[layer_name].boundingBoxWGS84),
+                    "wfs_opts": wfs_opts, 
+                }
+            if self.debug:
+                self.echo2json(json_out)
+            self.info = json_out
+        return self.info
     
     def get_capabilities(self):
-        json_out = {
-            "max_features": None,
-            "filter": None,
-            "layers": {},
-        }
-        all_epsg_code = None
-        all_layer_property = None
-        for layer_name in self.wfs.contents:
-            wfs_response = self.wfs.getfeature(
-                typename=layer_name, 
-                maxfeatures=1
-            )
-            tree = etree.fromstring(wfs_response.read())
-            nsmap = tree.nsmap
-            layer_property = []
-            for feature in tree.getiterator("{%s}featureMember" % nsmap["gml"]):
-                for layer in feature.iterfind('{%s}*' % nsmap["ms"]):
-                    for meta in layer.iterfind('{%s}*' % nsmap["ms"]):
-                        meta_name = meta.tag.split("{%s}" % nsmap[meta.prefix])[-1]
-                        layer_property.append(meta_name)
-
-            if layer_property:
-                epsg_code = [my.code for my in self.wfs.contents[layer_name].crsOptions]
-                json_out['layers'][layer_name] = {
-                    "epsg_code": epsg_code, 
-                    "layer_property": layer_property,
-                    "max_features": None,
-                    "filter": None,
-                }
-                if not all_layer_property:
-                    all_layer_property = layer_property
-                else:
-                    all_layer_property = list(
-                        set(all_layer_property).intersection(set(layer_property))
-                    )
-                if not all_epsg_code:
-                    all_epsg_code = epsg_code
-                else:
-                    all_epsg_code = list(
-                        set(all_epsg_code).intersection(set(epsg_code))
-                    )
-        json_out.update({
-            "epsg_code": all_epsg_code,
-            "layer_property": all_layer_property,
-        })
-        if self.debug:
-            self.echo2json(json_out)
-        return json_out
+        if self.capabilities is None:
+            json_out = {
+                "max_features": None,
+                "filter": None,
+                "layers": {},
+            }
+            all_epsg_code = None
+            all_layer_property = None
+            for layer_name in self.wfs.contents:
+                wfs_response = self.wfs.getfeature(
+                    typename=layer_name, 
+                    maxfeatures=1
+                )
+                tree = etree.fromstring(wfs_response.read())
+                nsmap = tree.nsmap
+                layer_property = []
+                for feature in tree.getiterator("{%s}featureMember" % nsmap["gml"]):
+                    for layer in feature.iterfind('{%s}*' % nsmap["ms"]):
+                        for meta in layer.iterfind('{%s}*' % nsmap["ms"]):
+                            meta_name = meta.tag.split("{%s}" % nsmap[meta.prefix])[-1]
+                            layer_property.append(meta_name)
+    
+                if layer_property:
+                    epsg_code = [
+                        my.code 
+                        for my 
+                        in self.wfs.contents[layer_name].crsOptions
+                    ]
+                    json_out['layers'][layer_name] = {
+                        "epsg_code": epsg_code, 
+                        "layer_property": layer_property,
+                        "max_features": None,
+                        "filter": None,
+                    }
+                    if not all_layer_property:
+                        all_layer_property = layer_property
+                    else:
+                        all_layer_property = list(
+                            set(all_layer_property).intersection(set(layer_property))
+                        )
+                    if not all_epsg_code:
+                        all_epsg_code = epsg_code
+                    else:
+                        all_epsg_code = list(
+                            set(all_epsg_code).intersection(set(epsg_code))
+                        )
+            json_out.update({
+                "epsg_code": all_epsg_code,
+                "layer_property": all_layer_property,
+            })
+            if self.debug:
+                self.echo2json(json_out)
+            self.capabilities = json_out
+        return self.capabilities
 
     def get_feature(self, layer_name, filter_json=None, **kwargs):
         feature_args = [

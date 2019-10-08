@@ -1,0 +1,7 @@
+version=3
+opts=\
+dversionmangle=s/\+(debian|dfsg|ds|deb)\d*$//,\
+uversionmangle=s/(\d)[_\.\-\+]?((RC|rc|pre|dev|beta|alpha)\d*)$/$1~$2/,\
+filenamemangle=s/(?:.*?)?[vr]?(\d[\d\.\-\w]*)\.(tgz|tbz|txz|(?:tar\.(?:gz|bz2|xz)))/owslib-$1.$2/ \
+https://github.com/geopython/owslib/releases \
+(?:.*?/archive/)?(?:rel|r|v|owslib)?[\-\_]?(\d[\d\-\.]+)\.(?:tgz|tbz|txz|(?:tar\.(?:gz|bz2|xz)))

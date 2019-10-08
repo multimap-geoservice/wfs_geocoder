@@ -1,0 +1,78 @@
+Source: owslib
+Maintainer: Debian GIS Project <pkg-grass-devel@lists.alioth.debian.org>
+Uploaders: Angelos Tzotsos <gcpp.kalxas@gmail.com>,
+           Johan Van de Wauw <johan@gisky.be>
+Section: python
+Priority: optional
+Build-Depends: debhelper (>= 9),
+               dh-python,
+               python-setuptools,
+               python-dateutil,
+               python-pytest,
+               python-tz,
+               python-all,
+               python-requests,
+               python3-setuptools,
+               python3-dateutil,
+               python3-pytest,
+               python3-tz,
+               python3-all,
+               python3-requests,
+               python3-sphinx
+Standards-Version: 4.3.0
+Vcs-Browser: https://salsa.debian.org/debian-gis-team/owslib
+Vcs-Git: https://salsa.debian.org/debian-gis-team/owslib.git
+Homepage: https://geopython.github.com/OWSLib/
+
+Package: python-owslib
+Architecture: all
+Depends: ${python:Depends},
+         ${misc:Depends},
+         python-lxml
+Suggests: owslib-doc
+Description: Client library for Open Geospatial (OGC) web services (Python 2)
+ OWSLib is a Python package for client programming with Open Geospatial
+ Consortium (OGC) web service (hence OWS) interface standards, and their
+ related content models.
+ .
+ Full documentation is available at https://geopython.github.io/OWSLib
+ .
+ OWSLib provides a common API for accessing service metadata and wrappers
+ for numerous OGC Web Service interfaces.
+ .
+ This package provides the Python 2 version of the library.
+
+Package: python3-owslib
+Architecture: all
+Depends: ${python3:Depends},
+         ${misc:Depends},
+         python3-lxml
+Suggests: owslib-doc
+Description: Client library for Open Geospatial (OGC) web services (Python 3)
+ OWSLib is a Python package for client programming with Open Geospatial
+ Consortium (OGC) web service (hence OWS) interface standards, and their
+ related content models.
+ .
+ Full documentation is available at https://geopython.github.io/OWSLib
+ .
+ OWSLib provides a common API for accessing service metadata and wrappers
+ for numerous OGC Web Service interfaces.
+ .
+ This package provides the Python 3 version of the library.
+
+Package: owslib-doc
+Architecture: all
+Section: doc
+Depends: ${sphinxdoc:Depends},
+         ${misc:Depends}
+Description: Client library for Open Geospatial (OGC) web services (Documentation)
+ OWSLib is a Python package for client programming with Open Geospatial
+ Consortium (OGC) web service (hence OWS) interface standards, and their
+ related content models.
+ .
+ Full documentation is available at https://geopython.github.io/OWSLib
+ .
+ OWSLib provides a common API for accessing service metadata and wrappers
+ for numerous OGC Web Service interfaces.
+ .
+ This package provides the documentation of the library.

@@ -1,0 +1,19 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+export PYBUILD_NAME=owslib
+export PYBUILD_AFTER_BUILD_python3 = cd docs;make html
+
+include /usr/share/dpkg/pkg-info.mk
+
+BUILD_DATE = $(shell LC_ALL=C date -u "+%B %d, %Y" -d "@$(SOURCE_DATE_EPOCH)")
+SPHINXOPTS = -D today="$(BUILD_DATE)"
+
+%:
+	dh  $@ --with python2,python3,sphinxdoc --buildsystem pybuild --parallel
+
+override_dh_auto_test:
+#skipping tests as they require internet access
+
+override_dh_auto_clean:
+	rm -rf docs/build

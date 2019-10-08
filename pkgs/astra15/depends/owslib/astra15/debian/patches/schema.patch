@@ -1,0 +1,25 @@
+--- a/owslib/feature/schema.py
++++ b/owslib/feature/schema.py
+@@ -106,14 +106,20 @@
+     }
+ 
+     for element in elements:
+-        data_type = element.attrib['type'].replace(gml_key + ':', '')
++        if gml_key:
++            data_type = element.attrib['type'].replace(gml_key + ':', '')
++        else:
++            data_type = element.attrib['type']
+         name = element.attrib['name']
+ 
+         if data_type in mappings:
+             schema['geometry'] = mappings[data_type]
+             schema['geometry_column'] = name
+         else:
+-            schema['properties'][name] = data_type.replace(schema_key+':', '')
++            if schema_key:
++                schema['properties'][name] = data_type.replace(schema_key+':', '')
++            else:
++                schema['properties'][name] = data_type
+ 
+     if schema['properties'] or schema['geometry']:
+         return schema
