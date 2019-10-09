@@ -235,21 +235,14 @@ class GeoCoder(WfsFilter):
             }
             all_epsg_code = None
             all_layer_property = None
+            all_geom_property = None
             for layer_name in self.wfs.contents:
-                wfs_response = self.wfs.getfeature(
-                    typename=layer_name, 
-                    maxfeatures=1
-                )
-                tree = etree.fromstring(wfs_response.read())
-                nsmap = tree.nsmap
-                layer_property = []
-                for feature in tree.getiterator("{%s}featureMember" % nsmap["gml"]):
-                    for layer in feature.iterfind('{%s}*' % nsmap["ms"]):
-                        for meta in layer.iterfind('{%s}*' % nsmap["ms"]):
-                            meta_name = meta.tag.split("{%s}" % nsmap[meta.prefix])[-1]
-                            layer_property.append(meta_name)
-    
-                if layer_property:
+                layer_schema = self.wfs.get_schema(layer_name)
+                if layer_schema:
+                    geom_property = layer_schema['geometry_column']
+                    layer_property = []
+                    layer_property.append(geom_property)
+                    layer_property += layer_schema['properties'].keys()
                     epsg_code = [
                         my.code 
                         for my 
@@ -258,16 +251,25 @@ class GeoCoder(WfsFilter):
                     json_out['layers'][layer_name] = {
                         "epsg_code": epsg_code, 
                         "layer_property": layer_property,
+                        "geom_property": geom_property,
                         "max_features": None,
                         "filter": None,
                     }
-                    if not all_layer_property:
+
+                    if all_layer_property is None:
                         all_layer_property = layer_property
                     else:
                         all_layer_property = list(
                             set(all_layer_property).intersection(set(layer_property))
                         )
-                    if not all_epsg_code:
+
+                    if all_geom_property is None:
+                        all_geom_property = geom_property
+                    elif all_geom_property is not False:
+                        if all_geom_property != geom_property:
+                            all_geom_property = False
+
+                    if all_epsg_code is None:
                         all_epsg_code = epsg_code
                     else:
                         all_epsg_code = list(
@@ -276,6 +278,7 @@ class GeoCoder(WfsFilter):
             json_out.update({
                 "epsg_code": all_epsg_code,
                 "layer_property": all_layer_property,
+                "geom_property": all_geom_property,
             })
             if self.debug:
                 self.echo2json(json_out)
@@ -400,11 +403,11 @@ class GeoCoder(WfsFilter):
                 capabilities["layers"][layer]["epsg_code"][0]
             )
             self.layer_property_cap = capabilities["layers"][layer]["layer_property"]
+            self.geom_property_cap = capabilities["layers"][layer]["geom_property"]
             self.layer_property_use = layer_opts.get(
                 "layer_property", 
                 capabilities["layers"][layer]["layer_property"]
             )
-            self.geom_property_cap = self.layer_property_cap[0]
             # return gjson & merge
             self.merge_gjson(
                 self.get_feature(**com_opts)
