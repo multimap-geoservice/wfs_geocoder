@@ -4,6 +4,7 @@
 import ogr
 import json
 import copy
+import eventlet
 from owslib.wfs import WebFeatureService
 from owslib.etree import etree
 
@@ -35,6 +36,7 @@ class GeoCoder(WfsFilter):
             wfs_url = url
         self.debug = debug
         self.map_name_use = map_name
+        self.green_pool = eventlet.GreenPool(200)
         
         wfs_args = {
             "url": wfs_url,
@@ -285,6 +287,30 @@ class GeoCoder(WfsFilter):
             self.capabilities = json_out
         return self.capabilities
 
+    def get_feature_eventlet(self, com_opts):
+        """
+        kwargs (for eventlet imap) - keys:
+            layer_name
+            filter_json
+            every ....
+        """
+        if not isinstance(com_opts, dict):
+            return
+        layer_name = com_opts.get("layer_name", None)
+        if layer_name:
+            del com_opts['layer_name']
+        else:
+            return
+
+        if com_opts.has_key("filter_json"):
+            filter_json = com_opts["filter_json"]
+            del com_opts['filter_json']
+        else:
+            filter_json = None
+            
+        return self.get_feature(layer_name, filter_json, **com_opts)
+       
+    
     def get_feature(self, layer_name, filter_json=None, **kwargs):
         feature_args = [
             "propertyname", 
@@ -300,7 +326,7 @@ class GeoCoder(WfsFilter):
         for arg in feature_args:
             if kwargs.get(arg, None):
                 out_args[arg] = kwargs[arg]
-                
+        
         return self.gml2json(
             self.wfs.getfeature(**out_args).read()
         )
@@ -362,6 +388,8 @@ class GeoCoder(WfsFilter):
         req_opts = copy.deepcopy(request_)
         if req_opts.has_key("layers"):
             del(req_opts["layers"])
+        
+        all_opts = []
         for layer in req_layers:
             capabilities['layers'][layer]["layer"] = None
             layer_opts = {"layer": layer}
@@ -408,10 +436,11 @@ class GeoCoder(WfsFilter):
                 "layer_property", 
                 capabilities["layers"][layer]["layer_property"]
             )
-            # return gjson & merge
-            self.merge_gjson(
-                self.get_feature(**com_opts)
-            )
+            all_opts.append(com_opts)
+            
+        # return gjson & merge
+        for green_out in self.green_pool.imap(self.get_feature_eventlet, all_opts):
+            self.merge_gjson(green_out)
         
         resp_out = copy.deepcopy(self.response)
         self._set_def_resp_params()  # end response
