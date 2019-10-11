@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
 # encoding: utf-8
 
-import sys
 import ogr
 import json
 import copy
-import signal
-from multiprocessing import Process, Queue
+import eventlet
+
+owslib = eventlet.import_patched('owslib')
+
+WebFeatureService = owslib.WebFeatureService
+etree = owslib.etree
 
 from gc_filters import WfsFilter
-
-from owslib.wfs import WebFeatureService
-from owslib.etree import etree
 
 
 ########################################################################
@@ -39,15 +39,16 @@ class GeoCoder(WfsFilter):
             wfs_url = url
         self.debug = debug
         self.map_name_use = map_name
+        self.green_pool = eventlet.GreenPool(200)
         
-        self.wfs_args = {
+        wfs_args = {
             "url": wfs_url,
             "version": self.wfs_ver,
         }
         if isinstance(self.wfs_timeout, int):
-            self.wfs_args["timeout"] = self.wfs_timeout
+            wfs_args["timeout"] = self.wfs_timeout
         try:
-            self.wfs = WebFeatureService(**self.wfs_args)
+            self.wfs = WebFeatureService(**wfs_args)
         except Exception as err:
             raise Exception(
                 u"WFS is not support in '{0}'\n{1}".format(
@@ -289,7 +290,31 @@ class GeoCoder(WfsFilter):
             self.capabilities = json_out
         return self.capabilities
 
-    def get_owslib_args(self, layer_name, filter_json=None, **kwargs):
+    def get_feature_eventlet(self, com_opts):
+        """
+        kwargs (for eventlet imap) - keys:
+            layer_name
+            filter_json
+            every ....
+        """
+        if not isinstance(com_opts, dict):
+            return
+        layer_name = com_opts.get("layer_name", None)
+        if layer_name:
+            del com_opts['layer_name']
+        else:
+            return
+
+        if com_opts.has_key("filter_json"):
+            filter_json = com_opts["filter_json"]
+            del com_opts['filter_json']
+        else:
+            filter_json = None
+            
+        return self.get_feature(layer_name, filter_json, **com_opts)
+       
+    
+    def get_feature(self, layer_name, filter_json=None, **kwargs):
         feature_args = [
             "propertyname", 
             "maxfeatures", 
@@ -304,8 +329,10 @@ class GeoCoder(WfsFilter):
         for arg in feature_args:
             if kwargs.get(arg, None):
                 out_args[arg] = kwargs[arg]
-
-        return out_args
+        
+        return self.gml2json(
+            self.wfs.getfeature(**out_args).read()
+        )
     
     def merge_gjson(self, gjson):
         if not isinstance(self.response, list) or not isinstance(gjson, dict):
@@ -412,17 +439,14 @@ class GeoCoder(WfsFilter):
                 "layer_property", 
                 capabilities["layers"][layer]["layer_property"]
             )
-            all_opts.append(
-                self.get_owslib_args(**com_opts)
-            )
+            all_opts.append(com_opts)
+            #self.merge_gjson(
+                #self.get_feature(**com_opts)
+            #)
             
         #return gjson & merge
-        multy_layer = MultyLayer(self.wfs_args, all_opts)
-        for gml_layer in multy_layer():
-            self.merge_gjson(
-                self.gml2json(gml_layer)
-            )
-        del multy_layer
+        for green_out in self.green_pool.imap(self.get_feature_eventlet, all_opts):
+            self.merge_gjson(green_out)
         
         resp_out = copy.deepcopy(self.response)
         self._set_def_resp_params()  # end response
@@ -463,60 +487,3 @@ class GeoCoder(WfsFilter):
         
     def __call__(self, *args, **kwargs):
         return self.get_response(*args, **kwargs)
-    
-
-########################################################################
-class MultyLayer:
-    """"""
-
-    #----------------------------------------------------------------------
-    def __init__(self, wfs_args, all_opts):
-        """Constructor"""
-        self.wfs_args = wfs_args
-
-        self.ques = []
-        self.procs = []
-        for opt in all_opts:
-            self.ques.append(Queue())
-            self.procs.append(
-                Process(
-                    target=self.owslib_request,
-                    name='',
-                    args=(
-                        opt,
-                        self.ques[-1]
-                    )
-                )
-            )
- 
-    def start(self):
-        signal.signal(signal.SIGTERM, self.stop)
-        signal.signal(signal.SIGINT, self.stop)
-        signal.signal(signal.SIGQUIT, self.stop)
-        for proc in self.procs:
-            proc.start()
-            
-        out_list = []
-        for que in self.ques:
-            out_list.append(que.get())
-        
-        for proc in self.procs:
-            proc.join()
-
-        return out_list
-
-    def stop(self, *args):
-        for proc in self.procs:
-            proc.terminate()
-        sys.exit(1)
-    
-    def owslib_request(self, owslib_opts, que):
-        wfs = WebFeatureService(**self.wfs_args)
-        out = wfs.getfeature(**owslib_opts).read()
-        del wfs
-        que.put(out)
-        
-    def __call__(self):
-        return self.start()
-    
-    
